@@ -12,34 +12,34 @@ async function main() {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 500,
+      max_tokens: 1500,
+      tools: [
+        {
+          "type": "web_search_20250305",
+          "name": "web_search"
+        }
+      ],
       messages: [
         {
           role: "user",
-          content: `${config.prompt}\n\nReturn ONLY a JSON array of ${config.count} strings, nothing else. No markdown, no code fences, no preamble. Example format: ["Headline one", "Headline two"]`
+          content: `${config.prompt}\n\nOnce you have the real stories, respond with ONLY a JSON array of ${config.count} strings — the final surreal headlines. No markdown, no code fences, no preamble, no explanation. Example format: ["Headline one", "Headline two"]`
         }
       ]
     })
   });
 
   const data = await response.json();
-  const text = data.content[0].text.trim();
+
+  if (data.error) {
+    throw new Error('API error: ' + JSON.stringify(data.error));
+  }
+
+  // Web search responses can include multiple content blocks
+  // (search calls, search results, text). We only want the text blocks,
+  // and specifically the LAST one, since that's Claude's final answer
+  // after it has finished searching.
+  const textBlocks = data.content.filter(block => block.type === 'text');
+  const finalText = textBlocks[textBlocks.length - 1]?.text?.trim() || '';
 
   // Strip accidental code fences just in case
-  const cleaned = text.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-
-  const headlines = JSON.parse(cleaned);
-
-  const output = {
-    generated_at: new Date().toISOString(),
-    headlines: headlines
-  };
-
-  fs.writeFileSync('headlines.json', JSON.stringify(output, null, 2));
-  console.log('Headlines generated:', headlines);
-}
-
-main().catch(err => {
-  console.error('Error generating headlines:', err);
-  process.exit(1);
-});
+  const cleaned = finalText.replace(/^```json\s*/i, '').replace(/```$
